@@ -1,0 +1,3 @@
+# STEP→GLB 装配树转换的 Python 依赖(cadquery 含 OCP 内核)
+# 用法: python3 -m venv .venv-cad && .venv-cad/bin/pip install -r tools/requirements-cad.txt
+cadquery==2.8.0
