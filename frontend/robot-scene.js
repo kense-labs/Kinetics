@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -15,7 +16,7 @@ export class RobotScene {
     this.container = container;
     this.objects = new Map();
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#eef2f1");
+    this.scene.background = new THREE.Color("#ecf1ef");
     this.camera = new THREE.PerspectiveCamera(36, 1, 0.01, 20);
     this.camera.up.set(0, 0, 1);
     this.renderer = new THREE.WebGLRenderer({
@@ -27,24 +28,33 @@ export class RobotScene {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1;
+    this.renderer.toneMappingExposure = 1.02;
     this.renderer.domElement.setAttribute("aria-label", label);
     container.prepend(this.renderer.domElement);
+
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    const envScene = new RoomEnvironment();
+    this.pmremTarget = pmrem.fromScene(envScene, 0.04);
+    envScene.dispose();
+    pmrem.dispose();
+    this.scene.environment = this.pmremTarget.texture;
+    this.scene.environmentIntensity = 0.34;
+
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 0.65;
     this.controls.maxDistance = 3.2;
     this.controls.maxPolarAngle = Math.PI * 0.49;
-    const hemisphere = new THREE.HemisphereLight(0xffffff, 0xa6b9ad, 1.3);
+    const hemisphere = new THREE.HemisphereLight(0xffffff, 0xa8bcb1, 1.18);
     hemisphere.position.set(0, 0, 3);
     this.scene.add(hemisphere);
-    const light = new THREE.DirectionalLight(0xffffff, 2.2);
-    light.position.set(-0.8, -1.1, 2.5);
+    const light = new THREE.DirectionalLight(0xffffff, 2.15);
+    light.position.set(-0.85, -1.15, 2.55);
     light.castShadow = true;
     light.shadow.mapSize.set(
-      pixelRatio < 2 ? 512 : 1024,
-      pixelRatio < 2 ? 512 : 1024,
+      pixelRatio < 2 ? 512 : 2048,
+      pixelRatio < 2 ? 512 : 2048,
     );
     Object.assign(light.shadow.camera, {
       left: -1.2,
@@ -55,16 +65,43 @@ export class RobotScene {
     light.shadow.normalBias = 0.001;
     light.shadow.bias = -0.0001;
     this.scene.add(light);
-    const fill = new THREE.DirectionalLight(0xdce9ff, 0.6);
-    fill.position.set(1, 1, 1.4);
+    const fill = new THREE.DirectionalLight(0xdce9ff, 0.55);
+    fill.position.set(1.1, 1.0, 1.45);
     this.scene.add(fill);
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ color: 0xeef2f1, roughness: 0.93 }),
+      new THREE.MeshStandardMaterial({
+        color: 0xecf1ef,
+        roughness: 0.94,
+        metalness: 0.0,
+      }),
     );
     floor.position.z = -0.075;
     floor.receiveShadow = true;
     this.scene.add(floor);
+
+    // Subtle engineering datum ring around workspace center
+    const outerRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.62, 0.625, 96),
+      new THREE.MeshBasicMaterial({
+        color: 0xc5d5ce,
+        transparent: true,
+        opacity: 0.65,
+      }),
+    );
+    outerRing.position.set(0.28, 0, -0.0742);
+    this.scene.add(outerRing);
+    const innerRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.32, 0.323, 72),
+      new THREE.MeshBasicMaterial({
+        color: 0xcfdcd6,
+        transparent: true,
+        opacity: 0.5,
+      }),
+    );
+    innerRing.position.set(0.28, 0, -0.0742);
+    this.scene.add(innerRing);
+
     this.robot = new THREE.Group();
     this.scene.add(this.robot);
     this.controls.addEventListener("change", () => this.requestRender());
@@ -137,10 +174,13 @@ export class RobotScene {
         geometry.rotateX(Math.PI / 2);
       } else continue;
       const [red, green, blue, alpha] = item.color;
+      const isTaskObj = /cube|target|pad|box|bin|barrier|peg|socket/i.test(
+        item.name || "",
+      );
       const material = new THREE.MeshStandardMaterial({
         color: new THREE.Color(red, green, blue).convertSRGBToLinear(),
-        roughness: item.name === "cube_geom" ? 0.35 : 0.56,
-        metalness: 0.08,
+        roughness: isTaskObj ? 0.34 : 0.44,
+        metalness: isTaskObj ? 0.05 : 0.2,
         transparent: alpha < 1,
         opacity: alpha,
       });
@@ -215,6 +255,8 @@ export class RobotScene {
       object.material?.dispose();
       object.shadow?.map?.dispose();
     });
+    this.scene.environment = null;
+    this.pmremTarget?.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();

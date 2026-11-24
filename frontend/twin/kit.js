@@ -173,8 +173,8 @@ export function studioStage(radius = 4.2) {
   disc.receiveShadow = true;
   g.add(disc);
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(radius * 0.985, radius, 96),
-    new THREE.MeshStandardMaterial({ color: 0x0b0f14, emissive: PALETTE.cyan, emissiveIntensity: 1.4, transparent: true, opacity: 0.9 }));
+    new THREE.RingGeometry(radius * 0.988, radius, 96),
+    new THREE.MeshStandardMaterial({ color: 0x0b0f14, emissive: PALETTE.cyan, emissiveIntensity: 0.75, transparent: true, opacity: 0.48 }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.005;
   g.add(ring);

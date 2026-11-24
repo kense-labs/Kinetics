@@ -40,6 +40,11 @@ test("desktop physical run, controls, replay and export", async ({
   page.on("pageerror", (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 960 });
   await openScene(page);
+  await page.locator('[data-task="transfer"]').click();
+  await expect(page.locator("#scene-task")).toHaveText("TRANSFER");
+  await expect
+    .poll(async () => (await canvasStats(page)).blue, { timeout: 15000 })
+    .toBeGreaterThan(10);
   const initial = await canvasStats(page);
   expect(initial.red).toBeGreaterThan(1);
   expect(initial.blue).toBeGreaterThan(10);
@@ -117,8 +122,8 @@ test("desktop physical run, controls, replay and export", async ({
     page.locator("#export").click(),
   ]);
   expect(download.suggestedFilename()).toContain(".json");
-  await page.locator('[data-task="barrier"]').click();
-  await expect(page.locator("#scene-task")).toHaveText("BARRIER");
+  await page.locator('[data-task="stack"]').click();
+  await expect(page.locator("#scene-task")).toHaveText("STACK");
   await expect(page.locator("#status-text")).toHaveText("待命");
   await page.locator("#run").click();
   await expect(page.locator("#status-text")).toHaveText("运行中");
@@ -137,7 +142,7 @@ test("mobile layout, scene and settings drawer", async ({ page }, testInfo) => {
   ).toBe(true);
   const stats = await canvasStats(page);
   expect(stats.red).toBeGreaterThan(1);
-  expect(stats.blue).toBeGreaterThan(10);
+  expect(stats.dark).toBeGreaterThan(20);
   await page.screenshot({
     path: testInfo.outputPath("workbench-mobile.png"),
     fullPage: true,
@@ -415,7 +420,7 @@ test("pending inference retains the previous result and history stays separate f
   await expect(page.locator("#decision-note")).toContainText(
     "请查看记录后重置",
   );
-  await expect(page.locator("#run")).toBeDisabled();
+  await expect(page.locator("#run")).toBeEnabled();
   await expect(page.locator("#step")).toBeDisabled();
   await expect(page.locator("#reset")).toBeEnabled();
   await page.locator("#live-inputs-detail summary").click();

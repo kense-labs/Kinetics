@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { STLLoader } from "three/addons/loaders/STLLoader.js";
-import { createIcons, X, ScanLine, Layers, MousePointerClick, ArrowLeft, Play, Workflow, Anchor } from "lucide";
+import { createIcons, X, ScanLine, Layers, MousePointerClick, ArrowLeft, Play, Workflow, SlidersHorizontal } from "lucide";
 import { TwinStage } from "./stage.js";
 import { loadRobot } from "./robots.js";
 
@@ -13,7 +13,7 @@ import { label as makeLabel, ground, studioStage, frameCamera, PALETTE } from ".
 import { EQUIPMENT_GROUPS, EQUIPMENT } from "./equipment.js";
 import "./twin.css";
 
-const TWIN_ICONS = { X, ScanLine, Layers, MousePointerClick, ArrowLeft, Play, Workflow, Anchor };
+const TWIN_ICONS = { X, ScanLine, Layers, MousePointerClick, ArrowLeft, Play, Workflow, SlidersHorizontal };
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);   // twin-assets 全部 meshopt 压缩(-c -kn, 体积 ~1/5)
@@ -211,52 +211,6 @@ function cloneEmissiveMats(node, filter = null) {
     if (!filter || filter(c.material)) mats.push(c.material);
   });
   return mats;
-}
-
-// 输送带花纹纹理(程序化: 横向花纹条 + 边缘导向线, 沿滚动轴重复)
-function makeBeltTexture(horizontal = false) {
-  const cv = document.createElement("canvas");
-  cv.width = cv.height = 256;
-  const c = cv.getContext("2d");
-  c.fillStyle = "#14161a";
-  c.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 8; i++) {
-    c.fillStyle = i % 2 ? "#21252c" : "#1b1f25";
-    if (horizontal) c.fillRect(0, i * 32, 256, 15);
-    else c.fillRect(i * 32, 0, 15, 256);
-  }
-  c.fillStyle = "rgba(255,255,255,0.055)";
-  if (horizontal) { c.fillRect(10, 0, 4, 256); c.fillRect(242, 0, 4, 256); }
-  else { c.fillRect(0, 10, 256, 4); c.fillRect(0, 242, 256, 4); }
-  const t = new THREE.CanvasTexture(cv);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 8;
-  return t;
-}
-
-// 带面 UV 与流向的自校准: 逐边求 uv 增量与局部 x 增量的有符号相关性,
-// 相关大的轴是滚动轴, 符号定滚动方向, k=平均 uv/米 —— 不猜 CAD 模型的 UV 展开习惯
-function beltScrollAxis(mesh) {
-  const g = mesh.geometry, pos = g.attributes.position, uv = g.attributes.uv;
-  if (!uv) return null;
-  const idx = g.index;
-  const n = Math.min(idx ? idx.count : pos.count, 6000);
-  let corrU = 0, corrV = 0, kU = 0, kV = 0, cnt = 0;
-  for (let i = 0; i + 1 < n; i += 3) {
-    const a = idx ? idx.getX(i) : i, b = idx ? idx.getX(i + 1) : i + 1;
-    const dx = pos.getX(b) - pos.getX(a);
-    const adx = Math.abs(dx);
-    if (adx < 0.005) continue;
-    const du = uv.getX(b) - uv.getX(a), dv = uv.getY(b) - uv.getY(a);
-    corrU += du * dx; corrV += dv * dx;
-    kU += Math.abs(du) / adx; kV += Math.abs(dv) / adx;
-    cnt++;
-  }
-  if (!cnt || (Math.abs(corrU) < 1e-6 && Math.abs(corrV) < 1e-6)) return null;
-  return Math.abs(corrU) >= Math.abs(corrV)
-    ? { axis: "x", sign: Math.sign(corrU), k: kU / cnt }
-    : { axis: "y", sign: Math.sign(corrV), k: kV / cnt };
 }
 
 const ANIMS = {
@@ -570,13 +524,20 @@ const ANIMS = {
 };
 
 export function createTwin(container, opts = {}) {
-  // 嵌入实验台视口: 深色影棚画布 + 右侧浮层参数/部件 + 返回仿真按钮
+  // 嵌入实验台视口: 深色影棚画布 + 可折叠右侧参数/部件抽屉 + 响应式操控坞
   container.innerHTML = `
   <div class="twin-shell embedded">
     <canvas id="twin-canvas"></canvas>
     <div class="twin-label"><h1 id="twin-title"></h1><p id="twin-subtitle"></p></div>
-    <button class="twin-back" id="twin-back" type="button"><i data-lucide="arrow-left"></i><span>返回仿真</span></button>
-    <div class="twin-side">
+    <div class="twin-hud" id="twin-hud" hidden>
+      <div class="hud-head"><span class="hud-metric"></span><span class="hud-row"><strong class="hud-count">0</strong><span class="hud-target"></span></span></div>
+      <div class="hud-bar"><i></i></div>
+    </div>
+    <div class="twin-top-actions">
+      <button class="twin-top-btn active" id="twin-side-toggle" type="button" aria-expanded="true" title="展开/收起参数与部件清单"><i data-lucide="sliders-horizontal"></i><span>参数与部件</span></button>
+      <button class="twin-top-btn twin-back" id="twin-back" type="button"><i data-lucide="arrow-left"></i><span>返回仿真</span></button>
+    </div>
+    <div class="twin-side" id="twin-side">
       <section class="twin-side-sec"><h2 class="twin-h2">设备参数</h2>
         <p class="twin-goal" id="twin-goal"></p>
         <table class="twin-specs" id="twin-specs"></table></section>
@@ -584,22 +545,14 @@ export function createTwin(container, opts = {}) {
         <ol class="twin-parts" id="twin-parts"></ol></section>
     </div>
     <div class="twin-hint">拖拽旋转 · 滚轮缩放 · 点击部件高亮</div>
-    <div class="twin-hud" id="twin-hud" hidden>
-      <div class="hud-metric"></div>
-      <div class="hud-row"><span class="hud-count">0</span><span class="hud-target"></span></div>
-      <div class="hud-bar"><i></i></div>
+    <div class="twin-dock">
+      <button class="twin-explode-btn embed twin-line-btn" id="twin-line" type="button"><i data-lucide="workflow"></i><span>产线巡检</span></button>
+      <button class="twin-explode-btn embed twin-tour-btn" id="twin-tour" type="button"><i data-lucide="play"></i><span>演示轮播</span></button>
+      <button class="twin-explode-btn embed" id="twin-explode" type="button"><i data-lucide="layers"></i><span>拆解 / 装配</span></button>
     </div>
-    <button class="twin-explode-btn embed" id="twin-explode" type="button"><i data-lucide="layers"></i><span>拆解 / 装配</span></button>
-    <button class="twin-explode-btn embed twin-tour-btn" id="twin-tour" type="button"><i data-lucide="play"></i><span>演示轮播</span></button>
-    <button class="twin-explode-btn embed twin-line-btn" id="twin-line" type="button"><i data-lucide="workflow"></i><span>产线巡检</span></button>
     <div class="twin-caption" id="twin-caption"></div>
     <div class="twin-flow" id="twin-flow" hidden>
       <span data-ch="0">来料</span><i>→</i><span data-ch="1">分拣</span><i>→</i><span data-ch="2">上下料</span><i>→</i><span data-ch="3">入库</span>
-    </div>
-    <div class="twin-pipwall" id="twin-pipwall" hidden>
-      <div class="pip" data-pip="0"><i></i><span>枪机 A · K101</span></div>
-      <div class="pip" data-pip="1"><i></i><span>云台枪机 · K102</span></div>
-      <div class="pip" data-pip="2"><i></i><span>枪机 C · K103</span></div>
     </div>
     <div class="twin-pick" id="twin-pick" hidden></div>
     <div class="twin-fade" id="twin-fade"></div>
@@ -825,12 +778,21 @@ export function createTwin(container, opts = {}) {
 
   // 构图并把主体向左让位, 躲开右侧参数/部件浮层
   let currentMarginOverride = null;
+  let sideUserToggled = false;
+  function setSideCollapsed(collapsed) {
+    const side = $("#twin-side");
+    const btn = $("#twin-side-toggle");
+    if (!side || !btn) return;
+    side.classList.toggle("collapsed", collapsed);
+    btn.classList.toggle("active", !collapsed);
+    btn.setAttribute("aria-expanded", String(!collapsed));
+  }
   function composeFrame(bb) {
-    const side = container.querySelector(".twin-side");
+    const side = container.querySelector(".twin-side:not(.collapsed)");
     const vpW = container.clientWidth || 1;
     const frac = side ? (side.offsetWidth + 24) / vpW / 2 : 0;   // 主体中心移到剩余区中央
-    // 左移会吃掉左侧画面空间, 构图距离同步放宽; 高瘦顶重设备(立杆/塔吊)用 def.margin 加余量防顶边亲吻
-    frameCamera(stage, bb, 25, 38, 2.1 * (1 + frac) * (currentMarginOverride ?? 1));
+    // 左移会吃掉左侧画面空间, 构图距离同步放宽; 高瘦顶重设备用 def.margin 加余量防顶边亲吻
+    frameCamera(stage, bb, 24, 36, 1.52 * (1 + frac * 0.85) * (currentMarginOverride ?? 1));
     if (frac > 0.02) {
       const cam = stage.camera;
       const fwd = stage.controls.target.clone().sub(cam.position).normalize();
@@ -846,23 +808,22 @@ export function createTwin(container, opts = {}) {
     const seq = ++selectSeq;
     const def = EQUIPMENT.find((e) => e.id === id) ?? EQUIPMENT[0];
     currentMarginOverride = def.margin ?? null;   // 高瘦顶重设备的构图余量
+    opts.onSceneChange?.(def, { tourMode });
+    if (!sideUserToggled && container.clientWidth > 0) {
+      setSideCollapsed(container.clientWidth < 680);
+    }
     // 换机过场: 快入黑场遮罩(加载间隙/冷载解码都被盖住), 新机位就绪后缓出
     const fadeEl = $("#twin-fade");
     if (fadeEl) { fadeEl.classList.remove("out"); fadeEl.classList.add("on"); }
     // GPU 资源收尾(在 clearScene 之前): 名牌画布纹理 + 引线几何 + 影棚地台(全部 twin 自建件)
-    // —— 展会连续切换几百次也不能让显存只涨不释放
     for (const l of current?.labels ?? []) { disposeDeep(l.sprite); disposeDeep(l.line); }
-    // 动画辅助件(轨迹带/钢丝绳/吊钩组/光幕)挂在上一台的模型克隆上, 切台即弃:
-    // 克隆体与缓存源共享几何/材质(不能动), 辅助件是独立几何必须显式 dispose
     const oldAux = [];
     current?.root?.traverse((o) => { if (o.userData?.twinAux) oldAux.push(o); });
     for (const o of oldAux) { o.parent?.remove(o); disposeDeep(o); }
-    // 程序化装备每次全新构建(不进缓存): 切台时整体释放, 几何/材质不滞留
     if (current?.def?.build && current.root) disposeDeep(current.root);
     for (const c of [...stage.scene.children])
       if (c.userData?.twinOwned) { stage.scene.remove(c); disposeDeep(c); }
-    stage.afterRender = null;   // 上一台的画中画/监控墙钩子拆掉
-    $("#twin-pipwall")?.setAttribute("hidden", "");
+    stage.afterRender = null;
     current = null;
     stage.clearScene();
     container.querySelector(".twin-clip-chip")?.remove();   // 清掉上一台的动画剪辑 chip
@@ -915,7 +876,7 @@ export function createTwin(container, opts = {}) {
       // 影棚地台按设备**水平投影**定半径(高瘦设备按体对角线会把地台放大好几倍, 构图全空)
       const finalBb = new THREE.Box3().setFromObject(root);
       const fs = finalBb.getSize(new THREE.Vector3());
-      const stageR = Math.max(2.8, Math.max(fs.x, fs.z) * 1.35 + 0.6);
+      const stageR = Math.max(2.4, Math.hypot(fs.x, fs.z) * 0.68 + 0.55);
       if (!def.noStage) {   // 整厂场景自带车间地坪/装修, 影棚地台+光环会压住厂区, 跳过
         const studio = studioStage(stageR);
         studio.userData.twinOwned = true;   // 切换设备时 dispose(画布纹理+几何不泄漏)
@@ -932,6 +893,7 @@ export function createTwin(container, opts = {}) {
         apron.userData.twinOwned = true;
         stage.add(apron);
       }
+      fit();   // 确保由隐藏态切入后 camera.aspect 与渲染尺寸先对齐, 再计算构图偏移
       composeFrame(finalBb);
       // 手工机位(def.manualFrame 显式开关, 高瘦顶重设备自动构图会切顶才用): camera=机位, camTarget=目标点
       if (def.manualFrame && def.camera) {
@@ -989,51 +951,6 @@ export function createTwin(container, opts = {}) {
           anim(dt, t, null);
           syncTaskCount();
         });
-      }
-      // 多路监控墙(动画暴露 pip 机位时启用): 剪裁视口直接画进主画布, 零回读
-      const wall = $("#twin-pipwall");
-      if (anim?.pip?.length && wall) {
-        wall.removeAttribute("hidden");
-        const cells = [...wall.querySelectorAll(".pip")];
-        cells.forEach((cell, i) => {
-          const p = anim.pip[i];
-          if (!p) { cell.style.display = "none"; return; }
-          cell.style.display = "";
-          cell.querySelector("span").textContent = p.label;
-          cell.onclick = () => {   // 点小窗 → 主相机飞到该机位俯视路面
-            const v = new THREE.Vector3(), qq = new THREE.Quaternion();
-            p.node.getWorldPosition(v); p.node.getWorldQuaternion(qq);
-            const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(qq);
-            stage.camera.position.copy(v).addScaledVector(fwd, -0.6).add(new THREE.Vector3(0, 0.25, 0.35));
-            stage.controls.target.set(v.x + fwd.x * 4.0, 0, v.z + fwd.z * 4.0);
-          };
-        });
-        const pv = new THREE.Vector3(), pq = new THREE.Quaternion(), pf = new THREE.Vector3();
-        stage.afterRender = () => {
-          const crect = canvas.getBoundingClientRect();
-          // three 的 setViewport/setScissor 内部会乘 devicePixelRatio —— 必须传 CSS 逻辑像素,
-          // 传 canvas.width 物理像素会被再乘一次 dpr(监控墙放大 2 倍飘到格子上方)
-          anim.pip.forEach((p, i) => {
-            const cell = cells[i]; if (!cell || cell.style.display === "none") return;
-            const r = cell.getBoundingClientRect();
-            const x = r.left - crect.left, w = r.width, h = r.height;
-            const y = crect.height - (r.bottom - crect.top);
-            // POV: 镜头世界位 + 俯视路面车道(真卡口是 60° 俯角, 看地不看天)
-            p.node.getWorldPosition(pv); p.node.getWorldQuaternion(pq);
-            pf.set(1, 0, 0).applyQuaternion(pq);
-            p.cam.aspect = w / h; p.cam.updateProjectionMatrix();
-            p.cam.position.copy(pv).addScaledVector(pf, 0.24);
-            p.cam.lookAt(pv.x + pf.x * 4.0, 0, pv.z + pf.z * 4.0);
-            stage.renderer.setScissorTest(true);
-            stage.renderer.setViewport(x, y, w, h);
-            stage.renderer.setScissor(x, y, w, h);
-            stage.renderer.clearDepth();
-            stage.renderer.render(stage.scene, p.cam);
-          });
-          stage.renderer.setScissorTest(false);
-          stage.renderer.setViewport(0, 0, crect.width, crect.height);   // 逻辑像素, 与 setSize 口径一致
-          stage.renderer.setScissor(0, 0, crect.width, crect.height);
-        };
       }
       // 骨骼动画桥: GLB 自带剪辑(UniMate/绑定角色导出) → AnimationMixer + 剪辑切换 chip
       if (payload.animations?.length) {
@@ -1279,6 +1196,14 @@ export function createTwin(container, opts = {}) {
       if (b) selectEquipment(b.dataset.scene);
     };
   }
+  $("#twin-side-toggle")?.addEventListener("click", () => {
+    sideUserToggled = true;
+    const nextCollapsed = !$("#twin-side")?.classList.contains("collapsed");
+    setSideCollapsed(nextCollapsed);
+    if (current && !current.def.manualFrame && explodeTarget < 0.5) {
+      composeFrame(new THREE.Box3().setFromObject(current.root));
+    }
+  });
   $("#twin-back")?.addEventListener("click", () => opts.onBack?.());
 
   stage.onPick = (info) => {

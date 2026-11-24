@@ -189,45 +189,45 @@ class EquipmentWorld:
         eid = self.equipment_id
         if eid == "sorting_line":
             return {
-                "feed_and_scan": ("推进过检扫描", "Advance roller conveyor so the incoming parcel passes the optical scanner arch for SKU classification.", 1.1),
-                "divert_to_chute": ("摆臂拨入滑道", "Swing diverter arm across belt to route a 'divert' SKU parcel into the sorting chute.", 1.2),
-                "pass_mainline": ("收臂主线直通", "Retract diverter arm to 85 deg and convey a 'standard' SKU parcel straight to mainline exit.", 1.1),
-                "discharge_chute": ("清空分流滑道", "Discharge accumulated parcels from the sorting chute tote to clear buffer capacity.", 0.9),
-                "finish": ("完工确认", "Confirm batch sorting target has been met with zero active jams.", 0.4),
+                "feed_and_scan": ("推进过检扫描", "驱动 39 辊动力输送线，送入来料包裹通过光幕视觉门架识别 SKU 类别。", 1.1),
+                "divert_to_chute": ("摆臂拨入滑道", "摆动分拣拨杆横跨主线，将异常/专线包裹精准导入侧向分流滑道。", 1.2),
+                "pass_mainline": ("收臂主线直通", "分拣拨杆收回至 85° 安全避让位，放行标准件沿主辊道直通出线。", 1.1),
+                "discharge_chute": ("清空分流滑道", "排空分流滑道周转箱内已积攒的包裹，释放滑道缓存容量防卡件。", 0.9),
+                "finish": ("完工确认", "确认当前批次包裹已全部分拣完毕且零堵线，闭环收尾。", 0.4),
             }
         if eid == "forklift":
             return {
-                "drive_to_dock": ("低位驶往月台取货区", "Drive empty forklift with lowered mast (<0.18m) to loading dock (z=-0.52m).", 1.4),
-                "engage_and_tilt": ("叉取托盘并门架后倾", "Insert forks into pallet, lift to 0.14m low travel height, and tilt mast -2.6 deg backward.", 1.2),
-                "transport_to_rack": ("低位安全转运至货架", "Drive loaded forklift at low center-of-gravity (<0.18m) to storage rack bay (z=+0.52m).", 1.6),
-                "elevate_to_beam": ("门架举升至高层横梁", "Stop chassis at rack bay and elevate pallet to 1.10m upper shelf height.", 1.5),
-                "place_and_lower": ("落托上架并降叉复位", "Deposit pallet onto rack beam and lower empty forks back to 0.06m safe travel height.", 1.4),
-                "finish": ("完工确认", "Confirm all scheduled pallets are safely racked.", 0.4),
+                "drive_to_dock": ("低位驶往月台取货区", "保持门架低位 (<0.18m) 空载安全行驶至装卸月台取货工位 (z=-0.52m)。", 1.4),
+                "engage_and_tilt": ("叉取托盘并门架后倾", "货叉插入标准托盘并微抬至 0.14m 低位行车高度，门架后倾 2.6° 稳固重心。", 1.2),
+                "transport_to_rack": ("低位安全转运至货架", "满载保持低重心安全高度 (<0.18m)，平稳行驶至高位货架立柱位 (z=+0.52m)。", 1.6),
+                "elevate_to_beam": ("门架举升至高层横梁", "底盘驻车制动锁止，二级液压门架平稳举升托盘至 1.10m 高层横梁高度。", 1.5),
+                "place_and_lower": ("落托上架并降叉复位", "将托盘精准落放于货架横梁，退出货叉并降回 0.06m 安全待命高度。", 1.4),
+                "finish": ("完工确认", "确认计划批次托盘已全部安全上架归位。", 0.4),
             }
         if eid == "kr210":
             return {
-                "approach_feeder": ("六轴移至来料台", "Move 6-axis heavy arm to billet feeder pickup pose.", 1.1),
-                "grip_billet": ("气动夹爪抓取毛坯", "Close heavy-duty pneumatic gripper onto billet.", 0.7),
-                "load_weld_fixture": ("装入工装并压紧锁死", "Place billet into welding fixture and engage pneumatic fixture clamps.", 1.3),
-                "spot_weld_cycle": ("执行多点焊接轨迹", "Execute spot-welding trajectory beat while fixture is clamped.", 1.4),
-                "unclamp_and_offload": ("松夹具并下料码放", "Release fixture clamps, transfer welded assembly to output rack, and open gripper.", 1.3),
-                "finish": ("完工确认", "Confirm robotic welding workstation batch is complete.", 0.4),
+                "approach_feeder": ("六轴移至来料台", "驱动 210kg 重载六轴机械臂移至毛坯上料台抓取准备姿态。", 1.1),
+                "grip_billet": ("气动夹爪抓取毛坯", "闭合重载气动平行夹爪，稳固夹持待焊金属毛坯件。", 0.7),
+                "load_weld_fixture": ("装入工装并压紧锁死", "将毛坯放入焊接工装定位巢，触发气动夹具压紧锁死。", 1.3),
+                "spot_weld_cycle": ("执行多点焊接轨迹", "确认工装夹具锁紧到位后，沿焊缝执行多点电阻点焊节拍。", 1.4),
+                "unclamp_and_offload": ("松夹具并下料码放", "释放焊接工装夹具，抓取成型焊件移至下料架松爪码放。", 1.3),
+                "finish": ("完工确认", "确认重载点焊工位当前批次工件全部完工。", 0.4),
             }
         if eid == "robot_cell":
             return {
-                "pick_housing": ("拾取精密待装壳体", "Move 7-DOF iiwa arm to feeder and close parallel jaws on precision housing.", 1.1),
-                "align_above_nest": ("移至装配巢上方对中", "Position held housing coaxially above assembly nest prior to compliant descent.", 1.1),
-                "compliant_insert": ("阻抗力控柔顺压装", "Execute force-limited compliant insertion (<18 N) into assembly nest.", 1.3),
-                "release_and_retract": ("松爪释放并安全撤离", "Open parallel jaws on seated assembly and retract arm to home clearance.", 1.0),
-                "finish": ("完工确认", "Confirm precision assembly batch is complete.", 0.4),
+                "pick_housing": ("拾取精密待装壳体", "七轴力控协作臂移至供料位，伺服平行夹爪轻柔抓取精密壳体。", 1.1),
+                "align_above_nest": ("移至装配巢上方对中", "携壳体运行至装配工装巢正上方完成同轴视觉/几何对中。", 1.1),
+                "compliant_insert": ("阻抗力控柔顺压装", "启用关节阻抗柔顺控制，在接触力安全阈值 (<18 N) 内下压插装到位。", 1.3),
+                "release_and_retract": ("松爪释放并安全撤离", "张开平行夹爪释放已压装总成，机械臂平滑抬升撤回安全位。", 1.0),
+                "finish": ("完工确认", "确认精密柔顺压装批次已全部达标完成。", 0.4),
             }
         if eid == "voron_printer":
             return {
-                "preheat_hotend_bed": ("热床与喷头闭环预热", "Heat PEI bed to 105 C and hotend nozzle to 245 C for industrial ABS extrusion.", 1.2),
-                "home_and_qgl": ("CoreXY 回零与四轴调平", "Home X/Y/Z axes and probe 4 bed corners via Quad Gantry Leveling (QGL).", 1.3),
-                "extrude_part_layers": ("高速轨迹挤出打印", "Execute CoreXY toolpath layers with active exhaust filtration.", 1.6),
-                "retract_and_release": ("抬升龙门退驻取件位", "Retract filament, raise flying gantry to Z=145mm park height, and release finished part.", 1.1),
-                "finish": ("完工确认", "Confirm additive manufacturing batch is complete.", 0.4),
+                "preheat_hotend_bed": ("热床与喷头闭环预热", "PEI 磁吸热床升温至 105°C、喷嘴升温至 245°C 工程材料熔融区间。", 1.2),
+                "home_and_qgl": ("CoreXY 回零与四轴调平", "执行三轴归零与四角探测龙门调平 (Quad Gantry Leveling)，校准热膨胀平面。", 1.3),
+                "extrude_part_layers": ("高速轨迹挤出打印", "启动飞行龙门高速 CoreXY 路径挤出成型，同步开启尾部活性炭排风过滤。", 1.6),
+                "retract_and_release": ("抬升龙门退驻取件位", "抽回耗材防拉丝，Z 轴飞行龙门抬升至 145mm 驻留位完成单件成型。", 1.1),
+                "finish": ("完工确认", "确认工业增材制造整机当前批次零件全部成型。", 0.4),
             }
         raise AssertionError("Unhandled CAD equipment")
 
@@ -653,9 +653,11 @@ class EquipmentSession:
             if engaged and self.status == "running":
                 self.status = "paused"
                 self.cancel.set()
+            elif not engaged and self.error and "急停" in self.error:
+                self.error = None
             return self.snapshot()
 
-    def step_once(self) -> dict:
+    def step_once(self, *, pause_after: bool = False) -> dict:
         with self.lock:
             if self.world.estop:
                 raise ValueError("急停联锁激活中 (E-Stop Engaged)")
@@ -666,6 +668,7 @@ class EquipmentSession:
                 self.status = "exhausted"
                 return self.snapshot()
 
+            self.error = None
             before = self.world.observe()
             cands = self.world.candidates(preview=self.preview)
             admitted = {c.id: f"{c.label}: {c.description}" for c in cands if c.admitted}
@@ -711,13 +714,18 @@ class EquipmentSession:
                 self.status = "completed"
             elif self.cycles >= self.max_cycles:
                 self.status = "exhausted"
+            elif pause_after and self.status == "idle":
+                self.status = "paused"
             return self.snapshot()
 
     def actuate_manual(self, action: str) -> dict:
         with self.lock:
+            if self.world.finished or self.status == "completed":
+                raise ValueError("当前批次已达标完工，请先重置设备再执行新批次动作")
             before = self.world.observe()
             cands = self.world.candidates(preview=self.preview)
             after = self.world.apply_action(action)
+            self.error = None
             self.cycles += 1
             record = {
                 "cycle": self.cycles,
@@ -737,6 +745,8 @@ class EquipmentSession:
                 self.status = "completed"
             elif self.cycles >= self.max_cycles:
                 self.status = "exhausted"
+            elif self.status == "idle":
+                self.status = "paused"
             return self.snapshot()
 
     def _loop(self, single_step: bool = False) -> None:

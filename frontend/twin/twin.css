@@ -167,89 +167,126 @@
   position: absolute;
   inset: 0;
   display: block;
-  background: #0d141b;
+  background: radial-gradient(circle at 46% 38%, #14222c 0%, #0b1117 72%, #070b10 100%);
   z-index: 6;
   min-height: 0;
 }
 .twin-shell.embedded #twin-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
-/* 返回仿真按钮(右上) */
-.twin-back {
+/* 右上角操控组: 参数抽屉开关 + 返回仿真 */
+.twin-top-actions {
   position: absolute; top: 16px; right: 16px; z-index: 8;
-  display: flex; align-items: center; gap: 7px;
-  padding: 8px 13px; border-radius: 6px;
-  border: 1px solid rgba(150, 188, 176, 0.35);
-  background: rgba(13, 20, 27, 0.72);
-  backdrop-filter: blur(10px);
-  color: #b8d2c8; font-size: 11px; letter-spacing: 0.04em;
-  cursor: pointer; transition: all 0.15s ease;
+  display: flex; align-items: center; gap: 8px;
 }
-.twin-back:hover { border-color: #22d3ee; color: #e8f6f1; }
-.twin-back svg { width: 13px; height: 13px; }
+.twin-top-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px; border-radius: 8px;
+  border: 1px solid rgba(164, 210, 196, 0.24);
+  background: rgba(11, 18, 24, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #b6d1c6; font-size: 11px; font-weight: 500; letter-spacing: 0.03em;
+  cursor: pointer; transition: all 0.18s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+.twin-top-btn:hover {
+  border-color: rgba(60, 240, 208, 0.55);
+  background: rgba(14, 28, 32, 0.85);
+  color: #ecfdf8;
+}
+.twin-top-btn.active {
+  border-color: rgba(60, 240, 208, 0.48);
+  background: rgba(12, 42, 34, 0.82);
+  color: #9ef2df;
+}
+.twin-top-btn svg { width: 13px; height: 13px; }
 
-/* 拆解按钮(右下, 嵌入式) */
+/* 右下角功能操控坞: 响应式 Flex 排列, 彻底杜绝窄视口碰撞重叠 */
+.twin-dock {
+  position: absolute; right: 16px; bottom: 14px; z-index: 8;
+  display: flex; align-items: center; justify-content: flex-end;
+  flex-wrap: wrap; gap: 8px;
+  max-width: calc(100% - 32px);
+}
 .twin-explode-btn.embed {
-  position: absolute; right: 16px; bottom: 16px; z-index: 8;
-  width: auto; margin: 0; padding: 10px 18px;
-  background: rgba(13, 32, 26, 0.78);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(34, 211, 238, 0.4);
-  color: #7ee7d4;
+  position: static;
+  width: auto; margin: 0; padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(11, 24, 22, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(60, 240, 208, 0.28);
+  color: #96ead8;
+  font-size: 11.5px; font-weight: 500;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32);
+  transition: all 0.18s ease;
 }
-.twin-explode-btn.embed:hover { background: rgba(16, 60, 48, 0.85); }
-.twin-explode-btn.embed.active { background: #0d5744; color: #eafffa; border-color: #22d3ee; }
-
-/* 演示轮播按钮(右下, 拆解按钮左侧) —— 选择器特异性必须压过 .twin-explode-btn.embed 的 right:16px,
-   否则四个按钮叠在同一坐标(上轮真实事故: 页面只剩最上面那颗能点) */
-.twin-explode-btn.embed.twin-tour-btn { right: 152px; }
-.twin-explode-btn.embed.twin-line-btn { right: 288px; }
-.twin-explode-btn.embed.twin-port-btn { right: 424px; }
+.twin-explode-btn.embed:hover {
+  background: rgba(16, 52, 42, 0.88);
+  border-color: rgba(60, 240, 208, 0.6);
+  color: #eafffa;
+  transform: translateY(-1px);
+}
+.twin-explode-btn.embed.active {
+  background: linear-gradient(135deg, rgba(16, 98, 76, 0.94), rgba(11, 74, 58, 0.94));
+  color: #ffffff;
+  border-color: #3cf0d0;
+  box-shadow: 0 0 20px rgba(60, 240, 208, 0.24), 0 4px 16px rgba(0, 0, 0, 0.35);
+}
 
 /* 轮播字幕(底部居中, 深玻璃) */
 .twin-caption {
-  position: absolute; left: 50%; bottom: 72px; z-index: 8;
+  position: absolute; left: 50%; bottom: 64px; z-index: 8;
   transform: translate(-50%, 8px);
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 10px 24px; border-radius: 12px;
-  background: rgba(8, 32, 26, 0.72); border: 1px solid rgba(34, 211, 238, 0.28);
-  color: #bff3e6; pointer-events: none; backdrop-filter: blur(10px);
-  opacity: 0; transition: opacity 0.5s ease, transform 0.5s ease;
-  white-space: nowrap;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 22px; border-radius: 12px;
+  background: rgba(8, 26, 22, 0.78); border: 1px solid rgba(60, 240, 208, 0.28);
+  color: #cbf7ec; pointer-events: none;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.42);
+  opacity: 0; transition: opacity 0.45s ease, transform 0.45s ease;
+  max-width: calc(100% - 40px);
+  text-align: center;
 }
 .twin-caption.show { opacity: 1; transform: translate(-50%, 0); }
-.twin-caption strong { font-size: 16px; letter-spacing: 0.03em; }
-.twin-caption span, .twin-caption em { font-size: 11px; font-style: normal; opacity: 0.72; }
+.twin-caption strong { font-size: 14.5px; font-weight: 600; letter-spacing: 0.02em; }
+.twin-caption span, .twin-caption em { font-size: 11px; font-style: normal; opacity: 0.78; }
 
 /* 产线巡检章节流转条(字幕上方): 当前章高亮, 换章时箭头脉冲 */
 .twin-flow {
-  position: absolute; left: 50%; bottom: 126px; z-index: 8; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 124px; z-index: 8; transform: translateX(-50%);
   display: flex; align-items: center; gap: 9px;
   padding: 6px 16px; border-radius: 999px;
-  background: rgba(8, 32, 26, 0.66); border: 1px solid rgba(34, 211, 238, 0.2);
-  backdrop-filter: blur(10px); pointer-events: none;
+  background: rgba(8, 26, 22, 0.72); border: 1px solid rgba(60, 240, 208, 0.22);
+  backdrop-filter: blur(12px); pointer-events: none;
+  white-space: nowrap;
 }
-.twin-flow span { font-size: 11px; color: #5d736c; letter-spacing: 0.05em; transition: color 0.3s; }
-.twin-flow span.on { color: #7ee7d4; font-weight: 600; text-shadow: 0 0 10px rgba(60, 240, 208, 0.5); }
+.twin-flow span { font-size: 11px; color: #678279; letter-spacing: 0.04em; transition: color 0.3s; }
+.twin-flow span.on { color: #7ee7d4; font-weight: 600; text-shadow: 0 0 10px rgba(60, 240, 208, 0.45); }
 .twin-flow i { font-style: normal; font-size: 10px; color: #3d544d; }
 .twin-flow i.pulse { animation: flowArrow 0.9s ease; color: #3cf0d0; }
 @keyframes flowArrow { 0% { transform: translateX(-4px); opacity: 0.2; } 40% { opacity: 1; } 100% { transform: translateX(0); } }
 
-/* 任务 HUD(顶部居中, 展会大屏可读) */
+/* 任务 HUD(左上标题下方紧凑徽章卡, 杜绝与右上按钮或标题撞车) */
 .twin-hud {
-  position: absolute; left: 50%; top: 14px; z-index: 8; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 8px 20px 10px; border-radius: 12px;
-  background: rgba(8, 32, 26, 0.66); border: 1px solid rgba(34, 211, 238, 0.22);
-  backdrop-filter: blur(10px); pointer-events: none;
+  position: absolute; left: 20px; top: 68px; z-index: 8;
+  display: flex; flex-direction: column; gap: 6px;
+  min-width: 176px;
+  padding: 9px 13px; border-radius: 10px;
+  background: rgba(9, 24, 21, 0.72); border: 1px solid rgba(60, 240, 208, 0.22);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
   transition: border-color 0.3s ease;
 }
-.twin-hud .hud-metric { font-size: 10px; color: #8ba39a; letter-spacing: 0.12em; }
-.twin-hud .hud-row { display: flex; align-items: baseline; gap: 6px; }
-.twin-hud .hud-count { font-size: 26px; font-weight: 600; color: #7ee7d4; line-height: 1; font-variant-numeric: tabular-nums; }
-.twin-hud .hud-target { font-size: 11px; color: #6d857c; }
-.twin-hud .hud-bar { width: 150px; height: 3px; border-radius: 2px; background: rgba(126, 231, 212, 0.18); overflow: hidden; }
-.twin-hud .hud-bar i { display: block; height: 100%; background: #3cf0d0; border-radius: 2px; transition: width 0.3s ease; }
-.twin-hud.done { border-color: rgba(88, 242, 165, 0.6); }
+.twin-hud .hud-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.twin-hud .hud-metric { font-size: 10.5px; color: #96b4a9; letter-spacing: 0.04em; }
+.twin-hud .hud-row { display: inline-flex; align-items: baseline; gap: 4px; }
+.twin-hud .hud-count { font-size: 18px; font-weight: 600; color: #7ee7d4; line-height: 1; font-variant-numeric: tabular-nums; }
+.twin-hud .hud-target { font-size: 10.5px; color: #748e84; font-variant-numeric: tabular-nums; }
+.twin-hud .hud-bar { width: 100%; height: 3px; border-radius: 99px; background: rgba(126, 231, 212, 0.16); overflow: hidden; }
+.twin-hud .hud-bar i { display: block; height: 100%; background: linear-gradient(90deg, #1fc5a8, #5ef5d8); border-radius: 99px; transition: width 0.35s ease; }
+.twin-hud.done { border-color: rgba(88, 242, 165, 0.65); }
 .twin-hud.done .hud-count { color: #58f2a5; }
 .twin-hud.flash { animation: hudFlash 1.6s ease; }
 @keyframes hudFlash {
@@ -258,33 +295,7 @@
   100% { box-shadow: 0 0 0 rgba(88, 242, 165, 0); }
 }
 
-/* 多路监控墙(左下, WebGL 剪裁视口的 DOM 标签壳; 画面本体由 afterRender 直接画进主画布) */
-.twin-pipwall {
-  position: absolute; left: 20px; bottom: 96px; z-index: 8;   /* 底排功能按钮高约 60px, 监控墙抬到其上方避免遮挡第三格 */
-  display: flex; gap: 10px;
-}
-.twin-pipwall .pip {
-  position: relative; width: 204px; height: 118px;
-  border: 1px solid rgba(34, 211, 238, 0.45); border-radius: 6px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.6);
-  cursor: pointer; transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.twin-pipwall .pip:hover { border-color: #3cf0d0; box-shadow: 0 4px 22px rgba(60, 240, 208, 0.25); }
-.twin-pipwall .pip span {
-  position: absolute; left: 7px; top: 5px;
-  font: 600 10px/1.4 ui-monospace, monospace; letter-spacing: 0.06em;
-  color: #9df3e2; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-  pointer-events: none;
-}
-.twin-pipwall .pip i {
-  position: absolute; right: 8px; top: 7px; width: 7px; height: 7px; border-radius: 50%;
-  background: #ff3b30; box-shadow: 0 0 6px #ff3b30;
-  animation: pipRec 1.6s ease-in-out infinite;
-  pointer-events: none;
-}
-@keyframes pipRec { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
-
-/* 换机过场: dip-to-black, 快入缓出(加载间隙被遮住, 热缓存下是 200ms 的优雅暗场) */
+/* 换机过场: dip-to-black, 快入缓出 */
 .twin-fade {
   position: absolute; inset: 0; z-index: 9;
   background: #06090e;
@@ -294,38 +305,73 @@
 .twin-fade.on { opacity: 1; }
 .twin-fade.out { transition: opacity 240ms ease-out; }
 
-/* 右侧浮层: 参数 + 部件清单(深色玻璃, 压在影棚画布上) */
+/* 右侧浮层: 参数 + 部件清单(深色玻璃, 支持一键折叠让位三维视口) */
 .twin-side {
-  position: absolute; top: 64px; right: 16px; bottom: 64px; z-index: 7;
-  width: 238px; display: flex; flex-direction: column; gap: 10px;
+  position: absolute; top: 56px; right: 16px; bottom: 58px; z-index: 7;
+  width: 234px; display: flex; flex-direction: column; gap: 10px;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.22s ease;
+}
+.twin-side.collapsed {
+  opacity: 0;
+  transform: translateX(18px);
   pointer-events: none;
 }
+.twin-side.collapsed .twin-side-sec { pointer-events: none; }
 .twin-side-sec {
   pointer-events: auto;
-  background: rgba(10, 17, 23, 0.72);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(150, 188, 176, 0.22);
-  border-radius: 10px;
+  background: rgba(10, 17, 23, 0.76);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(164, 210, 196, 0.18);
+  border-radius: 11px;
   padding: 13px 14px;
   overflow-y: auto;
   scrollbar-width: thin;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
 }
 .twin-side-sec.twin-side-grow { flex: 1; min-height: 0; }
-.twin-shell.embedded .twin-h2 { color: #9fc4b8; margin-bottom: 8px; }
-.twin-shell.embedded .twin-goal { margin: 0 0 8px; font-size: 11px; color: #7d9088; line-height: 1.55; }
-.twin-shell.embedded .twin-specs td { border-top-color: rgba(255, 255, 255, 0.07); color: #d7e6de; padding: 5px 0; }
-.twin-shell.embedded .twin-specs td:first-child { color: #7d9088; }
+.twin-shell.embedded .twin-h2 { color: #aad0c2; margin-bottom: 8px; font-size: 11.5px; letter-spacing: 0.06em; }
+.twin-shell.embedded .twin-goal { margin: 0 0 9px; font-size: 11px; color: #849a91; line-height: 1.55; }
+.twin-shell.embedded .twin-specs td { border-top-color: rgba(255, 255, 255, 0.07); color: #dcebe3; padding: 5.5px 0; font-size: 11px; }
+.twin-shell.embedded .twin-specs td:first-child { color: #82988f; }
 .twin-shell.embedded .twin-parts li {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.08);
+  transition: all 0.15s ease;
 }
-.twin-shell.embedded .twin-parts li:hover { border-color: rgba(34, 211, 238, 0.55); }
-.twin-shell.embedded .twin-parts li b { color: #d7e6de; }
-.twin-shell.embedded .twin-parts li svg { color: #7d9088; }
+.twin-shell.embedded .twin-parts li:hover {
+  background: rgba(60, 240, 208, 0.1);
+  border-color: rgba(60, 240, 208, 0.5);
+  transform: translateX(2px);
+}
+.twin-shell.embedded .twin-parts li b { color: #dcebe3; font-size: 11px; }
+.twin-shell.embedded .twin-parts li svg { color: #6fc4b2; }
 .twin-shell.embedded .twin-parts .alert-empty { background: none; border: 0; color: #5d6d66; justify-content: center; }
-.twin-shell.embedded .twin-hint { left: 20px; bottom: 16px; }
-.twin-shell.embedded .twin-label { left: 20px; top: 18px; }
-.twin-shell.embedded .twin-pick { left: 20px; top: 74px; }
+.twin-shell.embedded .twin-hint { left: 20px; bottom: 18px; }
+.twin-shell.embedded .twin-label { left: 20px; top: 18px; max-width: calc(100% - 240px); }
+.twin-shell.embedded .twin-label h1 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: #eff7f3; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.45); }
+.twin-shell.embedded .twin-pick {
+  left: 20px; top: 132px; z-index: 8; max-width: 280px;
+  background: rgba(12, 22, 27, 0.9);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(60, 240, 208, 0.35);
+  color: #e4f3ec;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.twin-shell.embedded .pick-head strong { color: #7ee7d4; }
+.twin-shell.embedded .pick-close { color: #8da59c; }
+.twin-shell.embedded .twin-pick td { border-top-color: rgba(255, 255, 255, 0.08); color: #dcebe3; padding: 5px 0; font-size: 11.5px; }
+.twin-shell.embedded .twin-pick td:first-child { color: #849c93; width: 44px; vertical-align: top; }
+.twin-shell.embedded .twin-pick td:last-child { text-align: left; line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .twin-top-btn span { display: none; }
+  .twin-top-btn { padding: 8px; }
+  .twin-shell.embedded .twin-label { max-width: calc(100% - 110px); }
+  .twin-shell.embedded .twin-hint { display: none; }
+  .twin-explode-btn.embed { padding: 7px 11px; font-size: 11px; }
+}
 
 /* 骨骼动画剪辑切换 chip(左下, 提示文字上方) */
 .twin-clip-chip {
