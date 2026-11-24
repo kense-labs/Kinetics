@@ -220,6 +220,12 @@ let comparisonView,
   deviceMode = false,
   currentEquipmentDef = null,
   equipState = null,
+  activeEquipId = null,
+  selectedEquipCycle = null,
+  equipHistorySig = "",
+  equipCandSig = "",
+  equipGridSig = "",
+  equipSensorSig = "",
   deviceSyncTimer = null,
   comparisonLoading,
   extensionsLoading;
@@ -279,7 +285,22 @@ async function ensureTwin() {
     host.hidden = true;
     $("#viewport").append(host);
     twinLoading = import("./twin/index.js")
-      .then(({ createTwin }) => createTwin(host, { embedded: true, onBack: exitDeviceMode }))
+      .then(({ createTwin }) =>
+        createTwin(host, {
+          embedded: true,
+          onBack: exitDeviceMode,
+          onSceneChange: (def, meta) => {
+            if (!deviceMode || !def) return;
+            for (const b of document.querySelectorAll("#device-options [data-device]"))
+              b.classList.toggle("active", b.dataset.device === def.id);
+            if (meta?.tourMode && currentEquipmentDef?.id !== def.id) {
+              currentEquipmentDef = def;
+              $(".app-shell").classList.toggle("cad-only", !def.controllable);
+              $("#device-goal").textContent = def.subtitle;
+            }
+          },
+        }),
+      )
       .then((view) => (twinView = view))
       .catch(() => {
         twinLoading = null;
@@ -289,11 +310,28 @@ async function ensureTwin() {
   }
   return twinLoading;
 }
+function setRunButtonVisual(isRunning, labelText) {
+  $("#run-label").textContent = labelText;
+  $("#run").classList.toggle("is-running", isRunning);
+  const runIcon = isRunning ? "pause" : "play";
+  if ($("#run").dataset.icon !== runIcon) {
+    $("#run").dataset.icon = runIcon;
+    const svgEl = $("#run svg") || $("#run i");
+    if (svgEl) svgEl.outerHTML = icon(runIcon);
+    createIcons({ icons, root: $("#run") });
+  }
+}
 function exitDeviceMode() {
   if (!deviceMode) return;
   deviceMode = false;
   currentEquipmentDef = null;
   equipState = null;
+  activeEquipId = null;
+  selectedEquipCycle = null;
+  equipHistorySig = "";
+  equipCandSig = "";
+  equipGridSig = "";
+  equipSensorSig = "";
   $(".app-shell").classList.remove("device-mode", "cad-only");
   const host = $("#twin-embed");
   if (host) host.hidden = true;
@@ -303,6 +341,8 @@ function exitDeviceMode() {
   $("#equip-sensors").hidden = true;
   $("#mujoco-sensors").hidden = false;
   $("#feedback-heading").textContent = "物理反馈";
+  const fbSummary = feedbackDetails?.querySelector("summary");
+  if (fbSummary) fbSummary.textContent = "物理反馈";
   for (const b of document.querySelectorAll("#device-options [data-device]")) b.classList.remove("active");
   $("#device-goal").textContent = "";
   if (deviceSyncTimer) { clearInterval(deviceSyncTimer); deviceSyncTimer = null; }
@@ -310,9 +350,16 @@ function exitDeviceMode() {
   document.querySelectorAll(".telemetry .metric-label").forEach((el, i) => (el.textContent = labels[i]));
   const units = ["m", "m", "m", "mm"];
   document.querySelectorAll(".telemetry .metric-value small").forEach((el, i) => (el.textContent = units[i]));
+  const h1 = document.querySelector(".viewport-label h1");
+  if (h1 && config?.robot) h1.textContent = config.robot;
+  const st = document.querySelector("#scene-task");
+  if (st) st.textContent = (state?.task || currentTask || "transfer").toUpperCase();
   $("#timeline-label").textContent = "EPISODE TIMELINE";
-  $("#run-label").textContent = "运行实验";
+  setRunButtonVisual(false, "运行实验");
   $("#task-goal").textContent = config?.tasks?.[currentTask]?.goal ?? "";
+  activeId = null;
+  historySignature = "";
+  candidateSignature = "";
   if (state) {
     renderState(state);
     sceneView.requestRender();
@@ -333,9 +380,31 @@ function equipmentSetupPayload(equipmentId) {
   };
 }
 
+function updateEquipControlAvailability(s) {
+  if (!s) return;
+  const estop = s.observation?.estop === true;
+  const pending = controlPending || resetting;
+  $("#run").disabled = pending || estop;
+  $("#step").disabled = pending || estop || s.status === "running";
+  $("#stop").disabled = pending || ["idle", "completed", "stopped"].includes(s.status);
+  $("#reset").disabled = pending;
+  $(".controls").setAttribute("aria-busy", String(pending));
+  const locked = pending || s.status === "running";
+  for (const el of document.querySelectorAll(
+    "#model-connect,#provider,#seed,#preview,#threshold,#speed,.task-option",
+  ))
+    el.disabled = locked;
+  $("#threshold").disabled =
+    locked || ["baseline", "chat", "claude"].includes(s.provider);
+}
+
 function renderEquipmentState(s) {
   if (!s || !deviceMode || !currentEquipmentDef?.controllable) return;
   equipState = s;
+  if (activeEquipId !== s.id) {
+    activeEquipId = s.id;
+    selectedEquipCycle = null;
+  }
   twinView?.applyBackendState?.(s);
   const obs = s.observation || {};
   const estop = obs.estop === true;
@@ -356,37 +425,67 @@ function renderEquipmentState(s) {
   });
   $("#frame-label").textContent = `${obs.completed ?? 0} / ${obs.target ?? 1} ${obs.unit ?? ""}`;
   $("#status-text").textContent = stateLabel;
+  $("#scene-status").classList.toggle("error", estop || ["error", "exhausted"].includes(s.status));
   $("#scene-time").textContent = `t = ${(obs.sim_seconds ?? 0).toFixed(2)} s`;
-  $("#run-label").textContent = s.status === "running" ? "暂停操控" : "决策运行";
-  $("#run").disabled = controlPending || resetting || estop;
-  $("#step").disabled = controlPending || resetting || estop || s.status === "running";
+  const runText = s.status === "running"
+    ? "暂停操控"
+    : s.status === "paused"
+      ? "继续操控"
+      : "决策运行";
+  setRunButtonVisual(s.status === "running", runText);
+  updateEquipControlAvailability(s);
   $("#run-budget").textContent = `${String(s.cycles).padStart(2, "0")} / ${String(s.max_cycles).padStart(2, "0")} CYCLES`;
-  $("#episode-id").textContent = `装备会话 / ${s.id}`;
-  $("#connection").textContent = "控制总线在线";
+  $("#episode-id").textContent = `装备会话 / ${s.id.toUpperCase()}`;
+  $("#connection").textContent = "● 控制总线在线";
   $("#observation-source").textContent = "PLC 状态机 + 安全联锁";
+  renderProviderStatus(s);
+
+  // History lookup for step inspection
+  const hist = s.history || [];
+  const histItem = hist.find((h) => h.cycle === selectedEquipCycle) || null;
+  if (selectedEquipCycle !== null && !histItem) selectedEquipCycle = null;
+  const shownRecord = histItem || s.last_decision;
 
   // Right-hand Decision Inspector
-  $("#stage").textContent = estop ? "E-STOP" : s.status.toUpperCase();
-  const last = s.last_decision;
-  $("#decision-context").textContent = estop ? "急停激活 · 机构锁死" : `实时闭环 · 第 ${s.cycles} 拍`;
-  $("#decision-title").textContent = last?.action_label ?? (estop ? "硬件急停已锁止" : "等待模型或人工下发指令");
-  $("#decision-provider").textContent = `${s.provider.toUpperCase()} · ${s.model}`;
-  $("#latency").textContent = last?.decision?.latency_ms != null ? `${Math.round(last.decision.latency_ms)} ms` : "— ms";
+  $("#decision-heading").textContent = histItem ? `历史输出 · 第 ${histItem.cycle} 拍` : "当前决策";
+  $("#decision-live").hidden = !histItem;
+  $("#decision-section").classList.toggle("viewing-history", !!histItem);
+  $("#stage").textContent = histItem ? "历史" : (estop ? "E-STOP" : s.status.toUpperCase());
+  $("#decision-context").textContent = histItem
+    ? `历史记录 · t = ${(histItem.after?.sim_seconds ?? 0).toFixed(1)} s`
+    : estop
+      ? "急停激活 · 机构锁死"
+      : `实时闭环 · 第 ${s.cycles} 拍`;
+  $("#decision-title").textContent = shownRecord?.action_label ?? (estop ? "硬件急停已锁止" : "等待模型或人工下发指令");
+  const shownProvider = shownRecord?.provider ?? s.provider;
+  const shownModel = shownRecord?.model ?? s.model;
+  $("#decision-provider").textContent = `${String(shownProvider).toUpperCase()} · ${shownModel}`;
+  const shownDec = shownRecord?.decision ?? shownRecord;
+  $("#latency").textContent = shownDec?.latency_ms != null ? `${Math.round(shownDec.latency_ms)} ms` : "— ms";
   $("#intent-panel").hidden = true;
-  $("#history-observations").hidden = true;
+  $("#planning-output").hidden = true;
 
-  const probs = last?.decision?.probabilities || {};
-  const cands = s.candidates || [];
-  $("#probabilities").innerHTML = cands.map((c) => {
-    const p = probs[c.id];
-    const pct = p != null ? Math.round(p * 100) : (last?.action === c.id ? 100 : 0);
-    const cls = !c.admitted ? "rejected" : (last?.action === c.id ? "selected" : "");
-    const tag = !c.admitted ? "联锁拦截" : (p != null ? `${pct}%` : (c.id === s.baseline_action ? "推荐" : "就绪"));
-    return `<div class="prob-row ${cls}"><div class="prob-top"><span>${escape(c.label)}</span><span>${tag}</span></div><div class="bar"><div class="bar-fill" style="width:${c.admitted ? Math.max(pct, c.id === s.baseline_action ? 18 : 4) : 100}%"></div></div></div>`;
-  }).join("");
+  const probs = shownDec?.probabilities || {};
+  const cands = (histItem ? histItem.candidates : s.candidates) || [];
+  const chosenId = shownRecord?.action ?? shownDec?.choice;
+  const nextCandSig = JSON.stringify([s.id, selectedEquipCycle, chosenId, s.baseline_action, probs, cands.map((c) => [c.id, c.admitted])]);
+  if (nextCandSig !== equipCandSig) {
+    equipCandSig = nextCandSig;
+    $("#probabilities").innerHTML = cands.map((c) => {
+      const p = probs[c.id];
+      const pct = p != null ? Math.round(p * 100) : (chosenId === c.id ? 100 : 0);
+      const cls = !c.admitted ? "rejected" : (chosenId === c.id ? "selected" : "");
+      const tag = !c.admitted ? "联锁拦截" : (p != null ? `${pct}%` : (chosenId === c.id ? "已执行" : (c.id === s.baseline_action && !histItem ? "推荐" : "就绪")));
+      const barW = c.admitted ? Math.max(pct, (!histItem && c.id === s.baseline_action) ? 16 : 0) : 100;
+      return `<div class="prob-row ${cls}" title="${escape(c.rejection || c.description || "")}"><div class="prob-top"><span>${escape(c.label)}</span><span>${tag}</span></div><div class="bar"><div class="bar-fill" style="width:${barW}%"></div></div></div>`;
+    }).join("");
+  }
 
   const noteEl = $("#decision-note");
-  if (s.error) {
+  if (histItem) {
+    noteEl.textContent = `正在查看第 ${histItem.cycle} 拍历史记录，三维场景保持实时驱动。`;
+    noteEl.classList.remove("failure");
+  } else if (s.error) {
     noteEl.textContent = s.error;
     noteEl.classList.add("failure");
   } else {
@@ -394,24 +493,63 @@ function renderEquipmentState(s) {
     noteEl.classList.remove("failure");
   }
 
+  $("#live-inputs-detail").hidden = !!histItem || !s.last_decision?.decision_input;
+  const nextLiveInputs = s.last_decision?.decision_input
+    ? JSON.stringify(s.last_decision.decision_input, null, 2)
+    : "";
+  if ($("#live-inputs").textContent !== nextLiveInputs) {
+    $("#live-inputs").textContent = nextLiveInputs;
+  }
+  $("#history-observations").hidden = !histItem;
+  if (histItem) {
+    const nextBefore = JSON.stringify(histItem.before, null, 2);
+    if ($("#history-before").textContent !== nextBefore) {
+      $("#history-before").textContent = nextBefore;
+      $("#history-after").textContent = JSON.stringify(histItem.after, null, 2);
+      $("#history-payload").textContent = JSON.stringify(
+        {
+          cycle: histItem.cycle,
+          action: histItem.action,
+          action_label: histItem.action_label,
+          provider: histItem.provider,
+          decision: histItem.decision,
+          candidates: histItem.candidates,
+        },
+        null,
+        2,
+      );
+      $("#history-inputs-detail").hidden = !histItem.decision_input;
+      $("#history-inputs").textContent = histItem.decision_input
+        ? JSON.stringify(histItem.decision_input, null, 2)
+        : "";
+    }
+  }
+
   // E-Stop & Direct Manual Actuation Matrix
   $("#equip-override-panel").hidden = false;
   const estopBtn = $("#equip-estop");
   estopBtn.classList.toggle("engaged", estop);
-  estopBtn.textContent = estop ? "⚠️ 急停已触发 · 点击解除急停 (RELEASE E-STOP)" : "急停联锁 (E-STOP · 点击紧急停机)";
+  estopBtn.textContent = estop ? "急停已锁止 · 点击解除急停 (RELEASE E-STOP)" : "急停联锁 (E-STOP · 点击紧急停机)";
 
-  const grid = $("#equip-action-grid");
-  grid.innerHTML = cands.map((c) => {
-    const blocked = !c.admitted;
-    const isBase = c.id === s.baseline_action && !blocked;
-    const sub = blocked ? `🔒 ${escape(c.rejection || "安全联锁拦截")}` : escape(c.description);
-    return `<button type="button" class="equip-act-btn${blocked ? " interlock-blocked" : ""}${isBase ? " baseline-hint" : ""}" data-equip-act="${escape(c.id)}"><strong>${escape(c.label)}${isBase ? " · 策略推荐" : ""}</strong><small>${sub}</small></button>`;
-  }).join("");
+  const liveCands = s.candidates || [];
+  const nextGridSig = JSON.stringify([s.id, s.baseline_action, estop, liveCands.map((c) => [c.id, c.admitted, c.rejection])]);
+  if (nextGridSig !== equipGridSig) {
+    equipGridSig = nextGridSig;
+    const grid = $("#equip-action-grid");
+    grid.innerHTML = liveCands.map((c) => {
+      const blocked = !c.admitted;
+      const isBase = c.id === s.baseline_action && !blocked;
+      const sub = blocked ? `🔒 ${escape(c.rejection || "安全联锁拦截")}` : escape(c.description);
+      return `<button type="button" class="equip-act-btn${blocked ? " interlock-blocked" : ""}${isBase ? " baseline-hint" : ""}" data-equip-act="${escape(c.id)}"><div class="equip-act-head"><strong>${escape(c.label)}</strong>${isBase ? '<span class="equip-act-pill">推荐</span>' : blocked ? '<span class="equip-act-pill blocked">联锁</span>' : `<span class="equip-act-dur">${c.seconds ?? 1.0}s</span>`}</div><small>${sub}</small></button>`;
+    }).join("");
+  }
 
   // Live PLC & Interlock Telemetry Sensors
   $("#mujoco-sensors").hidden = true;
   $("#equip-sensors").hidden = false;
   $("#feedback-heading").textContent = "PLC 与安全联锁";
+  const fbSummary = feedbackDetails?.querySelector("summary");
+  if (fbSummary) fbSummary.textContent = "PLC 与安全联锁";
   const tele = obs.telemetry || {};
   const sensorRows = [
     ["装备状态", stateLabel],
@@ -420,27 +558,41 @@ function renderEquipmentState(s) {
     ...Object.entries(tele)
       .filter(([, v]) => ["number", "string", "boolean"].includes(typeof v))
       .slice(0, 5)
-      .map(([k, v]) => [k, typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : String(v)]),
+      .map(([k, v]) => [k, typeof v === "number" ? (Number.isInteger(v) ? String(v) : v.toFixed(2)) : (typeof v === "boolean" ? (v ? "YES" : "NO") : String(v))]),
   ];
-  $("#equip-sensors").innerHTML = sensorRows.map(([k, v]) =>
-    `<span class="name">${escape(k)}</span><span class="sensor-value">${escape(v)}</span>`
-  ).join("");
+  const nextSensorSig = JSON.stringify(sensorRows);
+  if (nextSensorSig !== equipSensorSig) {
+    equipSensorSig = nextSensorSig;
+    $("#equip-sensors").innerHTML = sensorRows.map(([k, v]) =>
+      `<span class="name">${escape(k)}</span><span class="sensor-value${v === "YES" ? " on" : ""}">${escape(v)}</span>`
+    ).join("");
+  }
 
-  // History log
-  const hist = s.history || [];
-  $("#event-count").textContent = `${hist.length} 步`;
-  $("#events").innerHTML = hist.length
-    ? [...hist].reverse().map((h) =>
-        `<li class="event"><div><strong>#${h.cycle} ${escape(h.action_label)}</strong><span>${escape(h.provider)} · t=${(h.after?.sim_seconds ?? 0).toFixed(1)}s</span></div></li>`
-      ).join("")
-    : '<li class="empty">暂无执行记录，点击「决策运行」、「单步」或右侧「动作直控」开始操控</li>';
+  // History log (structured clickable timeline matching MuJoCo events)
+  const nextHistSig = `${s.id}-${hist.length}-${selectedEquipCycle}`;
+  if (nextHistSig !== equipHistorySig) {
+    equipHistorySig = nextHistSig;
+    const countLabel = `${hist.length} 拍`;
+    $("#event-count").textContent = countLabel;
+    if ($("#history-count")) $("#history-count").textContent = countLabel;
+    $("#events").innerHTML = hist.length
+      ? hist.map((h) => {
+          const isSel = h.cycle === selectedEquipCycle;
+          const pTag = h.provider === "external_override" ? "人工直控" : h.provider.toUpperCase();
+          const prog = h.after ? `${h.after.completed ?? 0}/${h.after.target ?? 1}${h.after.unit ?? ""}` : "";
+          return `<li class="event ${isSel ? "active" : ""}"><button type="button" class="event-button" data-cycle="${h.cycle}" aria-pressed="${isSel}" aria-label="查看第 ${h.cycle} 拍决策：${escape(h.action_label)}"><span class="event-line"><span>${escape(h.action_label)}</span><small>${(h.after?.sim_seconds ?? 0).toFixed(1)} s</small></span><span class="event-detail">第 ${h.cycle} 拍 · ${escape(pTag)}${prog ? ` · 进度 ${escape(prog)}` : ""}</span></button></li>`;
+        }).join("")
+      : '<li class="empty">暂无执行记录，点击「决策运行」、「单步」或上方「动作直控」开始操控</li>';
+    if (selectedEquipCycle === null) $("#events").scrollTop = $("#events").scrollHeight;
+  }
   $("#model-calls").textContent = `调用 ${s.metrics?.model_calls ?? 0} 次`;
-  $("#tokens").textContent = `输入 ${s.metrics?.input_tokens ?? 0} tokens`;
+  $("#tokens").textContent = `输入 ${(s.metrics?.input_tokens ?? 0).toLocaleString()} tokens`;
 }
 
 async function resetEquipment() {
   if (!currentEquipmentDef?.controllable || resetting) return false;
   resetting = true;
+  if (equipState) updateEquipControlAvailability(equipState);
   try {
     const snap = await api("/api/equipment/reset", equipmentSetupPayload(currentEquipmentDef.id));
     renderEquipmentState(snap);
@@ -450,12 +602,14 @@ async function resetEquipment() {
     return false;
   } finally {
     resetting = false;
+    if (equipState) updateEquipControlAvailability(equipState);
   }
 }
 
 async function controlEquipment(action) {
   if (!currentEquipmentDef?.controllable || controlPending || resetting) return;
   controlPending = true;
+  if (equipState) updateEquipControlAvailability(equipState);
   try {
     if (
       ["start", "step"].includes(action) &&
@@ -472,6 +626,7 @@ async function controlEquipment(action) {
     toast(e.message);
   } finally {
     controlPending = false;
+    if (equipState) updateEquipControlAvailability(equipState);
   }
 }
 
@@ -1171,6 +1326,8 @@ function renderDecision(s) {
   $("#feedback-heading").textContent = replayMode
     ? "回放物理反馈"
     : "实时物理反馈";
+  const fbSummary = feedbackDetails?.querySelector("summary");
+  if (fbSummary) fbSummary.textContent = replayMode ? "回放物理反馈" : "物理反馈";
   const failure = ["error", "uncertain", "exhausted", "stalled"].includes(
     s.status,
   );
@@ -1432,18 +1589,13 @@ function renderState(s) {
     : "";
   $("#run-budget").textContent =
     String(s.cycles).padStart(2, "0") + " / " + s.max_cycles + " 步";
-  $("#run-label").textContent =
+  const runText =
     s.status === "running"
       ? "暂停实验"
       : ["paused", "uncertain"].includes(s.status)
         ? "继续实验"
         : "运行实验";
-  const runIcon = s.status === "running" ? "pause" : "play";
-  if ($("#run").dataset.icon !== runIcon) {
-    $("#run").dataset.icon = runIcon;
-    $("#run svg").outerHTML = icon(runIcon);
-    createIcons({ icons });
-  }
+  setRunButtonVisual(s.status === "running", runText);
   updateControlAvailability();
   $("#preview-state").textContent = s.preview ? "ON" : "OFF";
   $("#model-calls").textContent = "调用 " + s.model_calls + " 次";
@@ -1653,6 +1805,7 @@ $("#equip-action-grid").onclick = async (event) => {
   const btn = event.target.closest("[data-equip-act]");
   if (!btn || !deviceMode || !currentEquipmentDef?.controllable || controlPending) return;
   controlPending = true;
+  if (equipState) updateEquipControlAvailability(equipState);
   try {
     const snap = await api("/api/equipment/actuate", {
       action: btn.dataset.equipAct,
@@ -1661,8 +1814,17 @@ $("#equip-action-grid").onclick = async (event) => {
     renderEquipmentState(snap);
   } catch (e) {
     toast(e.message);
+    try {
+      const latest = await api("/api/equipment/state");
+      if (deviceMode && currentEquipmentDef?.id === latest.equipment_id) {
+        renderEquipmentState(latest);
+      }
+    } catch {
+      /* Ignore refresh error */
+    }
   } finally {
     controlPending = false;
+    if (equipState) updateEquipControlAvailability(equipState);
   }
 };
 $("#camera-home").onclick = () => sceneView.cameraHome();
@@ -1675,7 +1837,8 @@ function renderTaskButtons() {
   if (!div || !config || !config.tasks) return;
   const keys = Object.keys(config.tasks);
   div.innerHTML = keys.map((t, i) =>
-    `<button class="task-option${t === currentTask ? " active" : ""}" data-task="${t}">${icon(TASK_ICONS[t] || "box")}<span>${escape(config.tasks[t].name)}</span><span class="task-number">${String(i + 1).padStart(2, "0")}</span></button>`).join("");
+    `<button class="task-option${t === currentTask ? " active" : ""}" data-task="${t}" type="button">${icon(TASK_ICONS[t] || "box")}<span>${escape(config.tasks[t].name)}</span><span class="task-number">${String(i + 1).padStart(2, "0")}</span></button>`).join("");
+  createIcons({ icons, root: div });
 }
 $(".task-options").onclick = async (event) => {
   const button = event.target.closest("[data-task]");
@@ -1709,14 +1872,26 @@ $("#robot-select").onchange = async () => {
     await refreshProviders();   // 失败则还原下拉选中态
   }
 };
-// 侧栏「设备模型」分区: 点击即在中央视口打开设备精模(可拆解)
+// 侧栏「设备模型」分区: 点击即在中央视口打开设备精模(可拆解 / PLC 闭环操控)
+const DEVICE_ICONS = {
+  sorting_line: "route",
+  forklift: "package",
+  kr210: "zap",
+  robot_cell: "crosshair",
+  voron_printer: "layers-2",
+  robot_panda: "box",
+  robot_ur5e: "box",
+  robot_xarm7: "box",
+  robot_gen3: "box",
+};
 {
   const div = $("#device-options");
   div.innerHTML = EQUIPMENT_GROUPS.map((g) =>
     `<p class="device-group">${g.title}</p>` +
     g.items.map((e) =>
-      `<button class="task-option" data-device="${e.id}" type="button">${icon("scan-line")}<span>${e.name}</span></button>`).join("")
+      `<button class="task-option device-item" data-device="${e.id}" type="button">${icon(DEVICE_ICONS[e.id] || "scan-line")}<span>${escape(e.name)}</span><em class="device-badge${e.controllable ? " plc" : ""}">${e.controllable ? "PLC" : "CAD"}</em></button>`).join("")
   ).join("");
+  createIcons({ icons, root: div });
   div.onclick = (event) => {
     const button = event.target.closest("[data-device]");
     if (!button) return;
@@ -1746,11 +1921,22 @@ $("#decision-open").onclick = focusDecision;
 $("#events").onclick = (event) => {
   const button = event.target.closest("[data-cycle]");
   if (!button) return;
+  if (deviceMode && currentEquipmentDef?.controllable) {
+    selectedEquipCycle = Number(button.dataset.cycle);
+    renderEquipmentState(equipState);
+    focusDecision();
+    return;
+  }
   selectedCycle = Number(button.dataset.cycle);
   renderState(state);
   focusDecision();
 };
 $("#decision-live").onclick = () => {
+  if (deviceMode && currentEquipmentDef?.controllable) {
+    selectedEquipCycle = null;
+    renderEquipmentState(equipState);
+    return;
+  }
   selectedCycle = null;
   renderState(state);
 };
@@ -1760,6 +1946,13 @@ $("#threshold").oninput = () =>
   ));
 $("#speed").oninput = () =>
   ($("#speed-value").textContent = Number($("#speed").value).toFixed(1) + "×");
+for (const sel of ["#seed", "#preview", "#speed"]) {
+  $(sel).addEventListener("change", () => {
+    if (deviceMode && currentEquipmentDef?.controllable && equipState?.status !== "running") {
+      resetEquipment();
+    }
+  });
+}
 $("#provider").onchange = async () => {
   $("#provider-note").textContent =
     $("#provider").value === "baseline"
@@ -1767,6 +1960,18 @@ $("#provider").onchange = async () => {
       : $("#provider").value === "jev"
         ? "远程 · TypeSafe API"
         : "本地 · 候选概率";
+  if (deviceMode && currentEquipmentDef?.controllable) {
+    const ok = await resetEquipment();
+    if (!ok) {
+      $("#provider").value = equipState?.profile_id
+        ? "profile:" + equipState.profile_id
+        : equipState?.provider || "baseline";
+      renderProviderStatus(equipState);
+      return;
+    }
+    await reset();
+    return;
+  }
   if (!(await reset()))
     $("#provider").value = state?.profile_id
       ? "profile:" + state.profile_id
@@ -1923,9 +2128,15 @@ function verificationLabel(saved, provider = $("#api-provider").value) {
   if (verification?.status === "failed") return "验证失败";
   return "已配置 · 未验证";
 }
-function renderProviderStatus() {
-  if (!["chat", "claude", "jev", "local"].includes(state?.provider)) {
+function renderProviderStatus(sessionOverride = null) {
+  const activeSess =
+    sessionOverride ||
+    (deviceMode && currentEquipmentDef?.controllable ? equipState : state);
+  if (!["chat", "claude", "jev", "local"].includes(activeSess?.provider)) {
     delete $(".provider-status").dataset.verification;
+    if (activeSess?.provider === "baseline") {
+      $("#provider-note").textContent = "离线 · 确定性策略";
+    }
     return;
   }
   const prefix = {
@@ -1933,12 +2144,12 @@ function renderProviderStatus() {
     claude: "Claude API",
     jev: "TypeSafe API",
     local: "结构化 API",
-  }[state.provider];
-  const saved = state.profile_id
-    ? profileValues.find((profile) => profile.id === state.profile_id)
-    : connectionValues[state.provider];
+  }[activeSess.provider];
+  const saved = activeSess.profile_id
+    ? profileValues.find((profile) => profile.id === activeSess.profile_id)
+    : connectionValues[activeSess.provider];
   $("#provider-note").textContent =
-    `${saved?.name || prefix} · ${verificationLabel(saved, state.provider)}`;
+    `${saved?.name || prefix} · ${verificationLabel(saved, activeSess.provider)}`;
   $(".provider-status").dataset.verification =
     saved?.verification?.status || "untested";
 }
@@ -2093,6 +2304,9 @@ async function saveConnection(testCall = false) {
     await refreshProviders();
     $("#provider").value = provider;
     await reset();
+    if (deviceMode && currentEquipmentDef?.controllable) {
+      await resetEquipment();
+    }
     if (testCall) {
       const result = await api(`/api/connections/${provider}/test`, {});
       $("#connection-result").textContent =

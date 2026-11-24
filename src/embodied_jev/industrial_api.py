@@ -149,7 +149,9 @@ def register_industrial_routes(app: FastAPI, public_result) -> None:
                 if action == "step":
                     if sess.status == "running":
                         sess.pause()
-                    snap = sess.step_once()
+                    if options.threshold is not None:
+                        sess.threshold = float(options.threshold)
+                    snap = sess.step_once(pause_after=True)
                 elif action == "start":
                     sess.start(single_step=False, threshold=options.threshold)
                     snap = sess.snapshot()

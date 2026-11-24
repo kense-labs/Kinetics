@@ -212,3 +212,33 @@ def test_strict_cad_only_assets_curated():
     assert glbs == expected_glbs
     assert (twin_dir / "robots" / "panda" / "model.xml").exists()
     assert not (REPO_ROOT / "frontend" / "twin" / "builders").exists()
+
+
+def test_equipment_single_step_pause_and_completed_actuate_guard():
+    with TestClient(create_app()) as tc:
+        rst = tc.post("/api/equipment/reset", json={"equipment_id": "robot_cell", "seed": 0, "target": 1})
+        assert rst.status_code == 200
+        ep_id = rst.json()["id"]
+        assert rst.json()["status"] == "idle"
+
+        # Interlock-blocked manual actuation increments interlock_trips immediately
+        bad = tc.post("/api/equipment/actuate", json={"action": "compliant_insert", "episode_id": ep_id})
+        assert bad.status_code == 422
+        state_after_bad = tc.get("/api/equipment/state").json()
+        assert state_after_bad["observation"]["interlock_trips"] == 1
+
+        # Single-stepping transitions idle -> paused and applies updated threshold
+        st = tc.post("/api/equipment/control/step", json={"episode_id": ep_id, "threshold": 0.72})
+        assert st.status_code == 200
+        assert st.json()["status"] == "paused"
+        assert st.json()["threshold"] == 0.72
+
+        # Finish remaining steps to completion, then verify post-completion actuate guard
+        for act in ("align_above_nest", "compliant_insert", "release_and_retract", "finish"):
+            res = tc.post("/api/equipment/actuate", json={"action": act, "episode_id": ep_id})
+            assert res.status_code == 200
+        assert res.json()["status"] == "completed"
+
+        after_done = tc.post("/api/equipment/actuate", json={"action": "pick_housing", "episode_id": ep_id})
+        assert after_done.status_code == 422
+        assert "已达标完工" in after_done.json()["detail"]
